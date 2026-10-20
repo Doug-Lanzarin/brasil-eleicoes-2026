@@ -10,10 +10,18 @@ export interface BrazilMapProps {
   summaries?: Partial<Record<UfSigla, string>>;
   selected: UfSigla | null;
   onSelect: (uf: UfSigla | null) => void;
+  controls?: 'full' | 'reset';
 }
 
 /** Mapa nacional: as 27 UFs, com siglas. */
-export function BrazilMap({ geometry, fills, summaries, selected, onSelect }: BrazilMapProps) {
+export function BrazilMap({
+  geometry,
+  fills,
+  summaries,
+  selected,
+  onSelect,
+  controls,
+}: BrazilMapProps) {
   const areas = useMemo<GeoMapArea[]>(
     () =>
       (geometry.features as UfFeature[]).flatMap((f) => {
@@ -35,6 +43,7 @@ export function BrazilMap({ geometry, fills, summaries, selected, onSelect }: Br
       ariaLabel="Mapa do Brasil por unidade federativa. Use Tab para navegar pelos estados e Enter para abrir o estado."
       testId="brazil-map"
       dataAttr="uf"
+      controls={controls}
     />
   );
 }

@@ -15,6 +15,13 @@ numa cidade **aproxima o mapa nela** e abre o detalhe, **separado por zona eleit
 - Atualização automática a cada 30 s (mínimo garantido), sem requisições simultâneas.
 - Funciona offline com o último resultado válido, sempre identificado com data e hora.
 
+**Celular e tablet em retrato (< 1024 px)** têm layout próprio (`src/features/mobile/`), sem
+alterar o layout web: tela de aplicativo sem rolagem, com barra superior (estado da atualização —
+toque para atualizar — e busca), placar do que está em foco (Brasil › Estado › Cidade, com o
+caminho clicável), mapa ocupando o centro (zoom por pinça) e painel inferior arrastável com três
+alturas e abas (Resumo, Estados/Municípios, Zonas), com o turno ao alcance do polegar. A busca
+encontra qualquer estado ou cidade pelo nome.
+
 Detalhes técnicos da integração: [`docs/INTEGRACAO-TSE.md`](docs/INTEGRACAO-TSE.md).
 
 ## Requisitos
@@ -239,7 +246,7 @@ mostra sempre a cobertura e a idade do cálculo.
 
 ## Testes
 
-`npm test` executa 107 testes, cobrindo:
+`npm test` executa 112 testes, cobrindo:
 
 1. identificação de Lula e Flávio por `sqcand` + número (`calc.test.ts`);
 2. percentuais sobre válidos e conferência com o percentual oficial;
@@ -264,7 +271,10 @@ mostra sempre a cobertura e a idade do cálculo.
     baixa de novo municípios inalterados;
 17. pré-carregamento: percorre as UFs, salva no cache, só baixa o que mudou, pula UF aberta e
     UF finalizada completa, pausa/retoma, respeita economia de dados/celular/conexão lenta, e
-    a prioridade "background" do limitador cede ao primeiro plano.
+    a prioridade "background" do limitador cede ao primeiro plano;
+18. layout do celular: placar, caminho e botão voltar, abas e alça do painel, arrastar para
+    expandir, troca de turno, busca de estado e de cidade (até as zonas). Os testes do layout web
+    não foram alterados.
 
 ## Limitações conhecidas
 

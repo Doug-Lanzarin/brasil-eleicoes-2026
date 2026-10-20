@@ -32,6 +32,8 @@ export interface GeoMapProps {
   maxZoom?: number;
   /** Aproxima o mapa na área selecionada (e volta ao enquadramento ao desmarcar). */
   zoomToSelected?: boolean;
+  /** Botões de zoom: todos (padrão) ou só "restaurar" (celular, onde o zoom é por pinça). */
+  controls?: 'full' | 'reset';
 }
 
 function useSize<T extends HTMLElement>() {
@@ -64,6 +66,7 @@ export function GeoMap({
   dataAttr = 'uf',
   maxZoom = 8,
   zoomToSelected = false,
+  controls = 'full',
 }: GeoMapProps) {
   const [containerRef, size] = useSize<HTMLDivElement>();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -286,12 +289,16 @@ export function GeoMap({
       {overlay}
 
       <div className="absolute right-2 top-2 flex flex-col gap-1">
-        <MapButton label="Aproximar" onClick={() => zoomBy(1.6)}>
-          +
-        </MapButton>
-        <MapButton label="Afastar" onClick={() => zoomBy(1 / 1.6)}>
-          −
-        </MapButton>
+        {controls === 'full' && (
+          <>
+            <MapButton label="Aproximar" onClick={() => zoomBy(1.6)}>
+              +
+            </MapButton>
+            <MapButton label="Afastar" onClick={() => zoomBy(1 / 1.6)}>
+              −
+            </MapButton>
+          </>
+        )}
         <MapButton label="Restaurar enquadramento" onClick={resetZoom}>
           ⟲
         </MapButton>

@@ -22,6 +22,8 @@ export interface StateMapProps {
   /** Origem dos dados na tela (dados salvos no aparelho ou ciclo concluído na rede). */
   source?: 'cache' | 'network' | null;
   cachedAt?: number | null;
+  /** "minimal": sem botão voltar nem nome (o celular tem navegação própria). */
+  variant?: 'default' | 'minimal';
 }
 
 /**
@@ -41,7 +43,9 @@ export function StateMap({
   progress,
   source = null,
   cachedAt = null,
+  variant = 'default',
 }: StateMapProps) {
+  const minimal = variant === 'minimal';
   const hasData = !!snapshot && Object.keys(snapshot.entries).length > 0;
   const info = ufBySigla(uf)!;
   const byIbge = useMemo(() => new Map(municipios.map((m) => [m.ibge, m])), [municipios]);
@@ -86,18 +90,23 @@ export function StateMap({
       dataAttr="mun"
       maxZoom={24}
       zoomToSelected
+      controls={minimal ? 'reset' : 'full'}
       overlay={
         <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-md border border-ink-600 bg-ink-850/95 px-3 py-1.5 text-sm font-medium text-ink-100 hover:bg-ink-700"
-          >
-            ← Brasil
-          </button>
-          <span className="rounded-md bg-ink-950/80 px-2 py-0.5 text-xs text-ink-300">
-            {info.nome} · {municipios.length} municípios
-          </span>
+          {!minimal && (
+            <>
+              <button
+                type="button"
+                onClick={onBack}
+                className="rounded-md border border-ink-600 bg-ink-850/95 px-3 py-1.5 text-sm font-medium text-ink-100 hover:bg-ink-700"
+              >
+                ← Brasil
+              </button>
+              <span className="rounded-md bg-ink-950/80 px-2 py-0.5 text-xs text-ink-300">
+                {info.nome} · {municipios.length} municípios
+              </span>
+            </>
+          )}
           {progress && progress.done < progress.total ? (
             <span
               className="rounded-md bg-ink-950/80 px-2 py-0.5 text-xs text-ink-300 tabular"

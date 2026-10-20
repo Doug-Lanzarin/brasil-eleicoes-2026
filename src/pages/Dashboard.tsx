@@ -1,6 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo } from 'react';
-import { BottomSheet } from '../components/BottomSheet';
 import { KpiStrip } from '../components/KpiStrip';
 import { BrazilMap } from '../components/map/BrazilMap';
 import { StateMap } from '../components/map/StateMap';
@@ -20,6 +19,7 @@ import {
   TurnoSwitch,
 } from '../features/election/ElectionControls';
 import { useSelection } from '../features/election/useSelection';
+import { MobileDashboard } from '../features/mobile/MobileDashboard';
 import { useElectionData } from '../hooks/useElectionData';
 import { useMunicipalGeometry, useUfGeometry } from '../hooks/useGeometry';
 import { useMunicipalResults } from '../hooks/useMunicipal';
@@ -117,6 +117,34 @@ export function Dashboard({ storeFactory }: DashboardProps) {
   ) : null;
 
   const stateResult = sel.uf ? (snapshot?.states[sel.uf]?.result ?? null) : null;
+
+  // Celular e tablet em retrato (< 1024 px): layout próprio. O layout web abaixo não muda.
+  if (!isDesktop) {
+    return (
+      <MobileDashboard
+        election={election}
+        round={round}
+        sel={sel}
+        setSel={setSel}
+        state={state}
+        store={store}
+        now={now}
+        geometry={geometry}
+        munGeometry={munGeometry}
+        municipal={municipal}
+        missingGeometry={missingGeometry}
+        fills={fills}
+        summaries={summaries}
+        counts={counts}
+        munCounts={munCounts}
+        prefetch={prefetch}
+        stateResult={stateResult}
+        selectUf={selectUf}
+        closeUf={closeUf}
+        selectMun={selectMun}
+      />
+    );
+  }
 
   const nationalBody = snapshot ? (
     <NationalPanel snapshot={snapshot} election={election} counts={counts} compact={isDesktop} />
@@ -266,29 +294,6 @@ export function Dashboard({ storeFactory }: DashboardProps) {
         </div>
       </main>
 
-      {!isDesktop && (
-        <>
-          <BottomSheet
-            open={!!sel.uf}
-            title={sel.uf ? `Detalhes de ${ufBySigla(sel.uf)?.nome}` : ''}
-            onClose={closeUf}
-          >
-            {detail}
-          </BottomSheet>
-          <nav
-            aria-label="Controles da eleição"
-            className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 border-t border-ink-700 bg-ink-950/95 px-safe py-2 pb-safe backdrop-blur"
-          >
-            <TurnoSwitch
-              election={election}
-              turno={round.turno}
-              onChange={(t) => setSel({ turno: t })}
-              className="flex-1"
-            />
-            <AbrangenciaSelect uf={sel.uf} onChange={selectUf} className="w-[44%]" />
-          </nav>
-        </>
-      )}
       <PwaStatus />
     </div>
   );

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -173,29 +173,85 @@ describe('Dashboard', () => {
   describe('mobile (390 px)', () => {
     beforeEach(() => setViewport(390));
 
-    it('usa painel inferior e controles de turno na barra inferior', async () => {
-      const { user } = setup();
+    const sheet = () => screen.getByTestId('mobile-sheet');
+    const scoreboard = () => screen.getByTestId('scoreboard');
+
+    it('mostra placar, mapa e painel inferior com o turno ao alcance do polegar', async () => {
+      setup();
       await waitFor(async () => expect((await mapPath('SP')).dataset.fill).toBe('flavio'));
-      const nav = screen.getByRole('navigation', { name: 'Controles da eleição' });
-      expect(within(nav).getByRole('radio', { name: '1º turno' })).toHaveAttribute(
+      await waitFor(() => expect(within(scoreboard()).getByText('55,56%')).toBeInTheDocument());
+      expect(within(scoreboard()).getByText('44,44%')).toBeInTheDocument();
+      expect(within(scoreboard()).getByText(/Lula à frente por 1\.000 votos/)).toBeInTheDocument();
+      expect(sheet().dataset.snap).toBe('peek');
+      expect(within(sheet()).getByRole('radio', { name: '1º turno' })).toHaveAttribute(
         'aria-checked',
         'true',
       );
-      await user.click(await mapPath('PE'));
-      const sheet = await screen.findByTestId('bottom-sheet');
-      expect(sheet.dataset.expanded).toBe('false');
-      expect(within(sheet).getByRole('heading', { name: /Pernambuco/ })).toBeInTheDocument();
-      await user.click(within(sheet).getByRole('button', { name: 'Expandir painel' }));
-      expect(sheet.dataset.expanded).toBe('true');
-      await user.click(within(sheet).getByRole('button', { name: /Fechar detalhes/ }));
-      expect(screen.queryByTestId('bottom-sheet')).toBeNull();
+      expect(screen.getByTestId('status-bar').dataset.freshness).toBe('fresh');
+      // Layout web não é usado no celular.
+      expect(screen.queryByTestId('kpi-strip')).toBeNull();
+      expect(screen.queryByTestId('national-panel')).toBeNull();
     });
 
-    it('mostra os indicadores nacionais compactos', async () => {
+    it('tocar num estado abre o estado, com caminho no placar e botão voltar', async () => {
+      const { user } = setup();
+      await user.click(await mapPath('PE'));
+      expect(within(sheet()).getByRole('heading', { name: 'Pernambuco' })).toBeInTheDocument();
+      const caminho = within(scoreboard()).getByRole('navigation', { name: 'Caminho' });
+      expect(within(caminho).getByText('Pernambuco')).toHaveAttribute('aria-current', 'page');
+      expect(within(sheet()).getByRole('tab', { name: 'Municípios' })).toBeInTheDocument();
+      expect(window.location.search).toContain('uf=PE');
+      await user.click(within(sheet()).getByRole('button', { name: 'Voltar para o Brasil' }));
+      expect(within(sheet()).getByRole('heading', { name: 'Brasil' })).toBeInTheDocument();
+      expect(window.location.search).not.toContain('uf=');
+    });
+
+    it('abas e alça expandem o painel; escolher um estado na lista volta ao mapa', async () => {
+      const { user } = setup();
+      await mapPath('SP');
+      await user.click(within(sheet()).getByRole('tab', { name: 'Estados' }));
+      expect(sheet().dataset.snap).toBe('half');
+      await user.click(within(sheet()).getByRole('button', { name: 'Expandir painel' }));
+      expect(sheet().dataset.snap).toBe('full');
+      await user.click(
+        await within(sheet()).findByRole('button', { name: /Rio de Janeiro: Lula à frente/ }),
+      );
+      expect(sheet().dataset.snap).toBe('peek');
+      expect(within(sheet()).getByRole('heading', { name: 'Rio de Janeiro' })).toBeInTheDocument();
+    });
+
+    it('arrastar o painel para cima o expande', async () => {
       setup();
-      const kpi = await screen.findByTestId('kpi-strip');
-      await waitFor(() => expect(within(kpi).getByText('55,56%')).toBeInTheDocument());
-      expect(within(kpi).getByText('44,44%')).toBeInTheDocument();
+      await mapPath('SP');
+      const handleZone = within(sheet()).getByRole('button', {
+        name: 'Expandir painel',
+      }).parentElement!;
+      fireEvent.pointerDown(handleZone, { clientY: 700, pointerId: 1 });
+      fireEvent.pointerMove(handleZone, { clientY: 400, pointerId: 1 });
+      fireEvent.pointerUp(handleZone, { clientY: 300, pointerId: 1 });
+      expect(sheet().dataset.snap).not.toBe('peek');
+    });
+
+    it('troca de turno pelo painel', async () => {
+      const { user } = setup();
+      await mapPath('SP');
+      await user.click(within(sheet()).getByRole('radio', { name: '2º turno' }));
+      expect(window.location.search).toContain('turno=2');
+      await waitFor(() =>
+        expect(within(scoreboard()).getByText(/Ainda sem votos apurados/)).toBeInTheDocument(),
+      );
+    });
+
+    it('busca um estado pelo nome', async () => {
+      const { user } = setup();
+      await mapPath('SP');
+      await user.click(screen.getByRole('button', { name: 'Buscar estado ou cidade' }));
+      const overlay = screen.getByTestId('search-overlay');
+      await user.type(within(overlay).getByRole('searchbox'), 'pern');
+      await user.click(await within(overlay).findByRole('button', { name: /Pernambuco/ }));
+      expect(screen.queryByTestId('search-overlay')).toBeNull();
+      expect(window.location.search).toContain('uf=PE');
+      expect(within(sheet()).getByRole('heading', { name: 'Pernambuco' })).toBeInTheDocument();
     });
   });
 
@@ -213,7 +269,7 @@ describe('Dashboard', () => {
     }));
 
     /** Arquivo de zonas FICTÍCIO para o município 10000: zona 4 com Lula, zona 9 com Flávio. */
-    let zonasFixture: unknown = {
+    const zonasOriginal: unknown = {
       versao: 1,
       fonte: 'FIXTURE DE TESTE',
       eleicao: '6257',
@@ -251,6 +307,8 @@ describe('Dashboard', () => {
       },
     };
 
+    let zonasFixture: unknown = zonasOriginal;
+
     /** Andamento por município (FICTÍCIO). Sem ele, todos os municípios são consultados. */
     let abMunicipal: unknown = undefined;
     let globalCalls: string[] = [];
@@ -258,6 +316,7 @@ describe('Dashboard', () => {
     beforeEach(() => {
       setViewport(1440);
       abMunicipal = undefined;
+      zonasFixture = zonasOriginal;
       const global = mockFetch((url) => {
         if (url.endsWith('/geo/mun/ac.json')) return JSON.parse(acGeo);
         if (url.endsWith('/config/mun-e006257-cm.json')) {
@@ -411,6 +470,37 @@ describe('Dashboard', () => {
       );
       await new Promise((r) => setTimeout(r, 300));
       expect(muCalls()).toHaveLength(0);
+    }, 30_000);
+
+    it('celular: busca uma cidade, abre a cidade e mostra as zonas', async () => {
+      setViewport(390);
+      const { user } = setup();
+      await mapPath('SP');
+      await user.click(screen.getByRole('button', { name: 'Buscar estado ou cidade' }));
+      const overlay = screen.getByTestId('search-overlay');
+      await user.type(within(overlay).getByRole('searchbox'), 'Município Fictício 0');
+      const first = (
+        await within(overlay).findAllByRole('button', { name: /Município Fictício/ })
+      )[0]!;
+      expect(first).toHaveTextContent('Município Fictício 0');
+      await user.click(first);
+      expect(window.location.search).toContain('uf=AC');
+      expect(window.location.search).toContain('mun=10000');
+      const sheetEl = screen.getByTestId('mobile-sheet');
+      expect(
+        within(sheetEl).getByRole('heading', { name: 'Município Fictício 0' }),
+      ).toBeInTheDocument();
+      await user.click(within(sheetEl).getByRole('tab', { name: 'Zonas' }));
+      const zonas = await within(sheetEl).findByTestId('zone-breakdown');
+      expect(within(zonas).getByText('Zona 4')).toBeInTheDocument();
+      // Placar da cidade (resultado oficial do município).
+      await waitFor(
+        () =>
+          expect(within(screen.getByTestId('scoreboard')).getByText('90,00%')).toBeInTheDocument(),
+        { timeout: 10_000 },
+      );
+      await user.click(within(sheetEl).getByRole('button', { name: 'Voltar para Acre' }));
+      expect(window.location.search).not.toContain('mun=');
     }, 30_000);
   });
 });
