@@ -4,7 +4,22 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Arquivos de zonas eleitorais publicados pelo workflow `zonas.yml` na branch `dados-zonas`.
+// Em produção, a Vercel faz o mesmo encaminhamento (vercel.json → rewrites).
+const zonasUpstream =
+  process.env.ZONAS_UPSTREAM ??
+  'https://raw.githubusercontent.com/Doug-Lanzarin/brasil-eleicoes-2026/dados-zonas/zonas';
+const zonasProxy = {
+  '/zonas': {
+    target: new URL(zonasUpstream).origin,
+    changeOrigin: true,
+    rewrite: (path: string) => path.replace(/^\/zonas/, new URL(zonasUpstream).pathname),
+  },
+};
+
 export default defineConfig({
+  server: { proxy: zonasProxy },
+  preview: { proxy: zonasProxy },
   plugins: [
     react(),
     tailwindcss(),
@@ -41,6 +56,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/zonas\//],
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
@@ -65,6 +81,11 @@ export default defineConfig({
               expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 },
               cacheableResponse: { statuses: [200] },
             },
+          },
+          {
+            // Zonas eleitorais: sempre da rede (o app mostra a idade do cálculo).
+            urlPattern: ({ url }) => url.pathname.startsWith('/zonas/'),
+            handler: 'NetworkOnly',
           },
           {
             // Resultados: nunca servidos pelo service worker. O app guarda o último

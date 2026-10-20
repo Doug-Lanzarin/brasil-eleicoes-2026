@@ -1,0 +1,85 @@
+name: Zonas eleitorais
+
+# Calcula resultados por zona eleitoral a partir dos boletins de urna (BU) do TSE e publica
+# na branch "dados-zonas" (servida pelo app em /zonas via vercel.json).
+#
+# - Agendado a cada 15 min, mas só trabalha na janela do dia da eleição (+3 dias) graças a
+#   --only-active; fora dela termina em segundos.
+# - Uma execução por vez (concurrency); cada uma roda até ~5h40 e publica a cada 3 min.
+# - O estado (seções já decodificadas) é mantido entre execuções pelo cache do Actions.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      turno:
+        description: 'Turno (1 ou 2)'
+        default: '2'
+        required: true
+      minutos:
+        description: 'Duração máxima (min)'
+        default: '330'
+        required: true
+      ufs:
+        description: 'UFs (ex.: ac,sp). Vazio = todas'
+        default: ''
+        required: false
+
+concurrency:
+  group: zonas-${{ github.event.inputs.turno || '2' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  zonas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      TURNO: ${{ github.event.inputs.turno || '2' }}
+      MINUTOS: ${{ github.event.inputs.minutos || '330' }}
+      UFS: ${{ github.event.inputs.ufs || '' }}
+      ONLY_ACTIVE: ${{ github.event_name == 'schedule' && '--only-active' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Restaurar estado
+        uses: actions/cache/restore@v4
+        with:
+          path: zonas-state
+          key: zonas-state-t${{ env.TURNO }}-${{ github.run_id }}
+          restore-keys: zonas-state-t${{ env.TURNO }}-
+
+      - name: Restaurar última publicação
+        run: |
+          git fetch --depth=1 origin dados-zonas:dados-zonas 2>/dev/null && \
+            git --work-tree=. checkout dados-zonas -- zonas 2>/dev/null && mv zonas zonas-out || true
+          git reset -q
+
+      - name: Calcular e publicar
+        env:
+          ZONAS_OUT: zonas-out
+          ZONAS_REMOTE: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        run: >
+          npm run zonas:worker --
+          --turno "$TURNO" --out zonas-out --state zonas-state
+          --max-minutes "$MINUTOS" --concurrency 32 --rate 80 --max-per-uf 3000
+          ${UFS:+--ufs "$UFS"} $ONLY_ACTIVE
+          --publish-cmd "bash scripts/publish-zonas.sh" --publish-every 3
+
+      - name: Salvar estado
+        if: always()
+        run: mkdir -p zonas-state && touch zonas-state/.keep
+
+      - if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: zonas-state
+          key: zonas-state-t${{ env.TURNO }}-${{ github.run_id }}

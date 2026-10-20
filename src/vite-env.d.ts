@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_REFRESH_INTERVAL_SECONDS?: string;
   readonly VITE_STALE_AFTER_SECONDS?: string;
   readonly VITE_DEFAULT_TURNO?: string;
+  readonly VITE_ZONAS_BASE_URL?: string;
 }
 
 interface ImportMeta {

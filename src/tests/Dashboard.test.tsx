@@ -202,6 +202,45 @@ describe('Dashboard', () => {
       c: i === 0 ? 's' : 'n',
     }));
 
+    /** Arquivo de zonas FICTÍCIO para o município 10000: zona 4 com Lula, zona 9 com Flávio. */
+    let zonasFixture: unknown = {
+      versao: 1,
+      fonte: 'FIXTURE DE TESTE',
+      eleicao: '6257',
+      turno: 1,
+      pleito: '3220',
+      uf: 'ac',
+      cargo: '1',
+      geradoEm: new Date().toISOString(),
+      candidatosValidos: ['13', '22'],
+      municipios: {
+        '10000': {
+          secoes: 10,
+          secoesProcessadas: 8,
+          zonas: {
+            '0004': {
+              secoes: 4,
+              secoesProcessadas: 4,
+              votos: { '13': 70, '22': 30 },
+              validos: 100,
+              brancos: 2,
+              nulos: 3,
+              comparecimento: 105,
+            },
+            '0009': {
+              secoes: 6,
+              secoesProcessadas: 4,
+              votos: { '13': 20, '22': 60 },
+              validos: 80,
+              brancos: 1,
+              nulos: 1,
+              comparecimento: 82,
+            },
+          },
+        },
+      },
+    };
+
     beforeEach(() => {
       setViewport(1440);
       const global = mockFetch((url) => {
@@ -215,6 +254,7 @@ describe('Dashboard', () => {
           };
         }
         if (url.endsWith('/dados/ac/ac-e006257-ab.json')) return undefined; // sem andamento: consulta todos
+        if (url.endsWith('/zonas/6257/ac.json')) return zonasFixture;
         const m = /ac(\d{5})-c0001-e006257-u\.json$/.exec(url);
         if (m) {
           const flavioLeads = m[1] === '10000';
@@ -260,6 +300,19 @@ describe('Dashboard', () => {
       expect(within(munDetail).getAllByText('90,00%').length).toBeGreaterThan(0);
       expect(window.location.search).toContain('mun=10000');
 
+      // A cidade aberta: mapa aproximado nela e resultado separado por zonas.
+      await waitFor(() =>
+        expect(stateMap.querySelector('svg > g')!.getAttribute('transform')).not.toBe(
+          'translate(0,0) scale(1)',
+        ),
+      );
+      const zonas = await within(munDetail).findByTestId('zone-breakdown');
+      expect(within(zonas).getByText('Zona 4')).toBeInTheDocument();
+      expect(within(zonas).getByText('Zona 9')).toBeInTheDocument();
+      expect(zonas.querySelector('[data-zona="0004"]')!.getAttribute('data-leader')).toBe('lula');
+      expect(zonas.querySelector('[data-zona="0009"]')!.getAttribute('data-leader')).toBe('flavio');
+      expect(within(zonas).getByText(/8 de 10 seções com boletim processado/)).toBeInTheDocument();
+
       // A lista de municípios também seleciona.
       await user.click(screen.getByRole('button', { name: /Município Fictício 1: Lula à frente/ }));
       expect(window.location.search).toContain('mun=10001');
@@ -268,6 +321,18 @@ describe('Dashboard', () => {
       await user.click(screen.getByRole('button', { name: '← Brasil' }));
       expect(await screen.findByTestId('brazil-map')).toBeInTheDocument();
       expect(window.location.search).not.toContain('mun=');
+    }, 20_000);
+
+    it('informa quando ainda não há resultados por zona', async () => {
+      zonasFixture = undefined; // 404
+      const { user } = setup();
+      await user.click(await mapPath('AC'));
+      const stateMap = await screen.findByTestId('state-map');
+      await waitFor(() => expect(stateMap.querySelector('path[data-mun="10001"]')).not.toBeNull());
+      await user.click(stateMap.querySelector('path[data-mun="10001"]')!);
+      expect(
+        await screen.findByText(/Resultados por zona ainda não disponíveis/),
+      ).toBeInTheDocument();
     }, 20_000);
   });
 });

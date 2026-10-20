@@ -20,6 +20,11 @@ export const appConfig = {
   tseBaseUrl: (env.VITE_TSE_BASE_URL || OFFICIAL_TSE_BASE_URL).replace(/\/+$/, ''),
   refreshSeconds: clampRefreshSeconds(readNumber(env.VITE_REFRESH_INTERVAL_SECONDS, 30)),
   staleAfterSeconds: readNumber(env.VITE_STALE_AFTER_SECONDS, 120),
+  /**
+   * Base dos arquivos de resultados por zona gerados por server/zonas/worker.ts.
+   * Padrão "/zonas": na Vercel, reescrito para a branch `dados-zonas` (vercel.json).
+   */
+  zonasBaseUrl: (env.VITE_ZONAS_BASE_URL || '/zonas').replace(/\/+$/, ''),
   /** Dados locais mais antigos que isso são descartados (não são mostrados como atuais). */
   persistedMaxAgeDays: 7,
 };

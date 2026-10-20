@@ -5,7 +5,10 @@ import { describeError } from '../services/tse/errors';
 import type { MunicipalSnapshot } from '../services/tse/municipal';
 import type { ElectionConfig, ElectionSnapshot, RoundConfig } from '../types/election';
 import { formatInt, titleCase } from '../utils/format';
+import { useNow } from '../hooks/useNow';
+import { useZonas } from '../hooks/useZonas';
 import { MunicipalList } from './MunicipalList';
+import { ZoneBreakdown } from './ZoneBreakdown';
 import { ApuracaoBadge, HeadToHead, IssuesNotice, LeaderLine, MetricsGrid } from './ResultSummary';
 
 export interface MunicipalData {
@@ -40,6 +43,8 @@ export function StateDetail({
   const entry = snapshot?.states[uf];
   const r = entry?.result ?? null;
   const mun = selectedMun ? municipal.snapshot?.entries[selectedMun] : undefined;
+  const zonas = useZonas(round, info.tse, !!selectedMun);
+  const now = useNow(15_000);
   const munInfo = useMemo(
     () => municipal.municipios.find((m) => m.codigo === selectedMun),
     [municipal.municipios, selectedMun],
@@ -103,6 +108,15 @@ export function StateDetail({
                 : `Resultado indisponível: ${mun.message ?? ''}`}
             </p>
           )}
+          <ZoneBreakdown
+            municipio={selectedMun}
+            arquivo={zonas.data}
+            isLoading={zonas.isLoading}
+            error={zonas.error}
+            election={election}
+            oficial={mun?.result ?? null}
+            now={now}
+          />
         </div>
       )}
 

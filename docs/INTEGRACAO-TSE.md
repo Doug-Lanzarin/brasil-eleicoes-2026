@@ -153,3 +153,29 @@ Se o TSE passar a bloquear CORS, a camada `src/services/tse/client.ts` permite a
 `VITE_TSE_BASE_URL` para um proxy próprio que replique os mesmos caminhos (por exemplo, uma
 função serverless que encaminhe `GET /oficial/*` para `resultados.tse.jus.br` com cache de
 30 s). Não use proxies públicos.
+
+## 7. Boletins de Urna (zonas eleitorais)
+
+Usados para calcular resultados por zona (`server/zonas/worker.ts`).
+
+| Arquivo                          | Caminho                                                                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Seções por UF, com chegada do BU | `/oficial/ele2026/arquivo-urna/<pleito>/config/<uf>/<uf>-p00<pleito>-cs.json`                                              |
+| Índice da seção                  | `/oficial/ele2026/arquivo-urna/<pleito>/dados/<uf>/<mun>/<zona>/<secao>/p00<pleito>-<uf>-m<mun>-z<zona>-s<secao>-aux.json` |
+| Boletim de urna                  | `.../<secao>/<hash>/<nome>-bu.dat` (nome e hash vêm do índice; usa-se o hash com `st: "Totalizado"`)                       |
+
+- Pleitos: **3220** (1º turno) e **3221** (2º turno), de `comum/config/ele-c.json`.
+- `cs.json`: `abr[].mu[].zon[].sec[]` com `ns` (seção), `da`/`ha` (data/hora de chegada do BU,
+  ausentes antes da chegada) e `nsp` nas **seções agregadas** (votam na urna da seção principal,
+  sem BU próprio — não entram na contagem).
+- BU: envelope ASN.1 DER; o último OCTET STRING contém a EntidadeBoletimUrna. Estrutura usada
+  documentada em `src/services/tse/bu.ts`. Cargo Presidente = `[1] cargoConstitucional 1`; tipos
+  de voto 1 nominal, 2 branco, 3 nulo.
+- Votos nominais em números sem candidatura válida (lista oficial, campo `dvt`) contam como
+  nulos técnicos — igual à totalização.
+- Cada BU decodificado é conferido com a seção pedida (pleito, município, zona, seção).
+- A área `arquivo-urna` suportou ~74 req/s sem HTTP 429 nos testes (a área `dados` responde 429
+  bem antes), por isso o processo tem limitador próprio e pausa em caso de 429.
+- Validação: Acre (1º turno) — 23 zonas idênticas ao arquivo oficial "Boletim de Urna na Web"
+  (`dadosabertos.tse.jus.br`, conjunto "Resultados - 2026 - Boletim de Urna"), publicado ~2 dias
+  após a eleição.

@@ -78,6 +78,7 @@ export function StateMap({
       testId="state-map"
       dataAttr="mun"
       maxZoom={24}
+      zoomToSelected
       overlay={
         <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
           <button

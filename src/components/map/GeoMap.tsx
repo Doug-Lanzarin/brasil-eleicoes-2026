@@ -30,6 +30,8 @@ export interface GeoMapProps {
   /** Atributo data-* usado para identificar cada área nos testes. */
   dataAttr?: 'uf' | 'mun';
   maxZoom?: number;
+  /** Aproxima o mapa na área selecionada (e volta ao enquadramento ao desmarcar). */
+  zoomToSelected?: boolean;
 }
 
 function useSize<T extends HTMLElement>() {
@@ -61,6 +63,7 @@ export function GeoMap({
   overlay,
   dataAttr = 'uf',
   maxZoom = 8,
+  zoomToSelected = false,
 }: GeoMapProps) {
   const [containerRef, size] = useSize<HTMLDivElement>();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -90,6 +93,7 @@ export function GeoMap({
       ...a,
       d: path(a.feature) ?? '',
       centroid: path.centroid(a.feature) as [number, number],
+      bounds: path.bounds(a.feature) as [[number, number], [number, number]],
     }));
   }, [areas, width, height]);
 
@@ -118,6 +122,27 @@ export function GeoMap({
       sel.on('.zoom', null);
     };
   }, [width, height, maxZoom, areas]);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    const behavior = zoomRef.current;
+    if (!zoomToSelected || !svg || !behavior) return;
+    const shape = selected ? shapes.find((s) => s.id === selected) : null;
+    if (!shape) {
+      behavior.transform(select(svg), zoomIdentity);
+      return;
+    }
+    const [[x0, y0], [x1, y1]] = shape.bounds;
+    // Área ocupando ~60% da tela, centralizada (limitada ao zoom máximo).
+    const k = Math.min(maxZoom, 0.6 / Math.max((x1 - x0) / width, (y1 - y0) / height, 1e-6));
+    behavior.transform(
+      select(svg),
+      zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(Math.max(1, k))
+        .translate(-(x0 + x1) / 2, -(y0 + y1) / 2),
+    );
+  }, [zoomToSelected, selected, shapes, width, height, maxZoom]);
 
   const zoomBy = (k: number) => {
     const svg = svgRef.current;

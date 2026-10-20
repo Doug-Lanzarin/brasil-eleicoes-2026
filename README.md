@@ -7,7 +7,8 @@ nacionais, detalhamento por estado e por município, e suporte a 1º e 2º turno
 
 Ao clicar num estado, o mapa passa a mostrar **somente aquele estado, dividido por
 municípios** (malha do IBGE), cada um colorido pelo resultado oficial do município. Clicar
-numa cidade abre o detalhe dela; "← Brasil" volta ao mapa nacional.
+numa cidade **aproxima o mapa nela** e abre o detalhe, **separado por zona eleitoral**;
+"← Brasil" volta ao mapa nacional.
 
 - Dados: `https://resultados.tse.jus.br/oficial` (sem scraping de HTML, sem dados inventados).
 - Geometrias: IBGE — API de Malhas Territoriais v3 (27 UFs).
@@ -190,9 +191,55 @@ A aplicação usa uma única rota (`/`) com parâmetros de consulta; não precis
 Se publicar num subdiretório, ajuste `base` em `vite.config.ts` e `start_url`/`scope` do
 manifesto.
 
+## Zonas eleitorais
+
+O TSE não publica resultados por zona nos arquivos de divulgação. Eles são calculados
+somando os **Boletins de Urna (BU)** de cada seção, que o TSE publica durante a apuração em
+`arquivo-urna/<pleito>/...` (formato binário ASN.1).
+
+- **Processo** `server/zonas/worker.ts` (`npm run zonas:worker`): lê a configuração de
+  seções de cada UF (com o horário de chegada de cada BU), baixa só os BUs novos, decodifica
+  (`src/services/tse/bu.ts`), soma por município/zona e grava `<eleicao>/<uf>.json`. Repete a
+  cada 60 s; revezando entre UFs (até 3.000 seções por UF por ciclo); limitador global com
+  pausa em HTTP 429; estado persistido em disco (não reprocessa o que já fez).
+- **Hospedagem**: o workflow `.github/workflows/zonas.yml` roda a cada 15 min, mas só
+  trabalha na janela do dia da eleição (+3 dias); cada execução dura até ~5h40 e publica a
+  cada 3 min na branch `dados-zonas`. A Vercel serve esses arquivos em `/zonas` (`vercel.json`).
+  Alternativa: rodar o processo num servidor próprio com `--serve <porta>` e apontar
+  `VITE_ZONAS_BASE_URL` para ele.
+- **No app**: ao abrir uma cidade, mostra cada zona (votos, percentuais sobre os válidos,
+  diferença, brancos, nulos), quantas seções já foram processadas e há quanto tempo o cálculo
+  foi feito; avisa se o TSE já totalizou seções que o cálculo ainda não processou.
+- **Sem mapa de zonas**: o TSE e o IBGE não publicam limites geográficos das zonas (são
+  conjuntos de locais de votação, não territórios). Por isso as zonas aparecem em lista.
+
+Comandos úteis:
+
+```bash
+npm run zonas:worker -- --turno 1 --ufs ac --once            # um ciclo, só o Acre
+npm run zonas:worker -- --turno 2 --serve 8790               # contínuo, servindo em :8790
+VITE_ZONAS_BASE_URL=http://localhost:8790 npm run dev
+```
+
+Opções: `--interval` (s, mín. 30), `--concurrency`, `--rate` (req/s), `--max-per-uf`,
+`--max-minutes`, `--out`, `--state`, `--publish-cmd`, `--publish-every`, `--only-active`.
+
+Para disparar manualmente no GitHub: _Actions → Zonas eleitorais → Run workflow_ (turno, duração,
+UFs). Workflows agendados só rodam na branch padrão do repositório.
+
+**Validação com dados reais (1º turno, Acre inteiro):** as 23 zonas calculadas a partir dos
+2.270 BUs batem, voto a voto, com o arquivo oficial "Boletim de Urna na Web" do TSE; somadas, dão
+exatamente o total oficial do estado (inclusive válidos e nulos técnicos). Rio Branco: zonas 1 e 9
+somam 56.423 (Lula) e 131.895 (Flávio), iguais ao resultado oficial do município.
+
+**Atraso esperado:** o Brasil tem ~500 mil seções (≈1 milhão de requisições: índice + BU). No
+teste, o processo sustentou ~74 req/s sem bloqueio (≈4 h para o país inteiro). Como os boletins
+chegam ao longo de ~4 h de apuração, o atraso típico é de minutos a ~1 h, maior no pico. O app
+mostra sempre a cobertura e a idade do cálculo.
+
 ## Testes
 
-`npm test` executa 84 testes, cobrindo:
+`npm test` executa 95 testes, cobrindo:
 
 1. identificação de Lula e Flávio por `sqcand` + número (`calc.test.ts`);
 2. percentuais sobre válidos e conferência com o percentual oficial;
@@ -209,7 +256,10 @@ manifesto.
     sheet, barra inferior, KPIs);
 13. mapa por municípios: abrir o estado, cores por município, seleção pelo mapa e pela lista,
     voltar ao Brasil; carregamento municipal (só o que mudou, 429, turno errado);
-14. limitador de requisições e malhas municipais (5.570 polígonos, códigos por UF).
+14. limitador de requisições e malhas municipais (5.570 polígonos, códigos por UF);
+15. zonas: decodificador do BU (amostra real conferida com o arquivo oficial), agregação por
+    zona (nulos técnicos, seções sem BU), validação do arquivo (rejeita outro turno/UF, somas
+    inconsistentes) e interface (cidade aproximada no mapa, cartões por zona, aviso sem dados).
 
 ## Limitações conhecidas
 

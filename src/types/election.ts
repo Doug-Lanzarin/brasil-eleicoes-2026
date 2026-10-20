@@ -27,6 +27,8 @@ export interface RoundConfig {
   label: string;
   /** Código da eleição no TSE para este turno (ex.: "6257"). */
   codigoEleicao: string;
+  /** Código do pleito (diretório `arquivo-urna/<pleito>` dos boletins de urna). */
+  pleito: string;
   /** Data do pleito (ISO). */
   date: string;
 }

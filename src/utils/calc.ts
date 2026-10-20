@@ -129,3 +129,26 @@ export function countStatesByFill(
   for (const entry of Object.values(states)) counts[mapFillFor(entry, election)]++;
   return counts;
 }
+
+/**
+ * Comparação Lula × Flávio a partir de votos por número de candidato e total de válidos
+ * (usada nas zonas eleitorais, calculadas a partir dos boletins de urna).
+ */
+export function compareFromVotes(
+  votosPorNumero: Record<string, number>,
+  validos: number,
+  election: ElectionConfig,
+): Comparison {
+  const [ca, cb] = election.candidates;
+  const va = votosPorNumero[ca.numero] ?? 0;
+  const vb = votosPorNumero[cb.numero] ?? 0;
+  const pa = percentOfValid(va, validos);
+  const pb = percentOfValid(vb, validos);
+  return {
+    votes: { [ca.key]: va, [cb.key]: vb } as Record<CandidateKey, number | null>,
+    pctValidos: { [ca.key]: pa, [cb.key]: pb } as Record<CandidateKey, number | null>,
+    leader: determineLeader(va, vb, [ca.key, cb.key]),
+    diffVotes: Math.abs(va - vb),
+    diffPP: pa != null && pb != null ? Math.abs(pa - pb) : null,
+  };
+}
