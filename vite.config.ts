@@ -26,7 +26,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['favicon.svg', 'apple-touch-icon*.png'],
+      includeAssets: ['favicon.svg', 'favicon-*.png', 'apple-touch-icon*.png'],
       manifest: {
         name: 'Brasil Eleitoral — Apuração em tempo real',
         short_name: 'Brasil Eleitoral',
@@ -37,11 +37,13 @@ export default defineConfig({
         background_color: '#0b1220',
         display: 'standalone',
         orientation: 'any',
+        id: '/',
         start_url: '/',
         scope: '/',
         icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'apple-touch-icon.png', sizes: '180x180', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           {
             src: 'maskable-512x512.png',
             sizes: '512x512',
