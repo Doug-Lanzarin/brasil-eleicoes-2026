@@ -128,6 +128,27 @@ O total nacional **inclui o exterior**, que não aparece no mapa (é exibido à 
   cabeçalhos observados incluem `x-ratelimit-limit: 5000` e `cache-control: max-age` curto
   (CDN Akamai), muito acima da carga gerada pela aplicação.
 
+### Limite de requisições (HTTP 429)
+
+Os arquivos trazem `x-ratelimit-limit` (valores de 2000 a 5000 por janela de 1 s foram
+observados), mas na prática o servidor respondeu **HTTP 429** a rajadas de poucos pedidos por
+segundo de arquivos fora do cache da CDN (testado com os arquivos municipais). Por isso todas
+as requisições passam por um limitador global (`src/services/tse/limiter.ts`):
+
+- prioridade alta (painel nacional/UFs) antes da baixa (municípios);
+- municípios: no máximo 3 simultâneos e 150 ms entre inícios;
+- após um 429, pausa geral de 5 s (dobrando até 60 s, volta ao normal após um sucesso); o
+  arquivo recusado fica "pendente" e só é pedido de novo no ciclo seguinte (≥ 30 s).
+
+Com esses parâmetros, carregar os 645 municípios de SP não gerou nenhum 429.
+
+### Municípios
+
+Ao abrir uma UF: `config/mun-e<ele>-cm.json` (lista de municípios, com `cd` TSE e `cdi`
+IBGE), `dados/<uf>/<uf>-e<ele>-ab.json` (andamento por município) e um
+`dados/<uf>/<uf><cd>-c0001-e<ele>-u.json` por município. Mesma regra de carimbo das UFs: a cada
+ciclo só são baixados os municípios cujo andamento mudou.
+
 Se o TSE passar a bloquear CORS, a camada `src/services/tse/client.ts` permite apontar
 `VITE_TSE_BASE_URL` para um proxy próprio que replique os mesmos caminhos (por exemplo, uma
 função serverless que encaminhe `GET /oficial/*` para `resultados.tse.jus.br` com cache de

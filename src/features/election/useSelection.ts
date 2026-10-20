@@ -6,6 +6,8 @@ export interface Selection {
   electionId: string;
   turno: 1 | 2;
   uf: UfSigla | null;
+  /** Código TSE do município (5 dígitos), apenas com uma UF selecionada. */
+  mun: string | null;
 }
 
 const envTurno = Number(import.meta.env.VITE_DEFAULT_TURNO);
@@ -19,7 +21,10 @@ export function parseSelection(search: string): Selection {
   const t = Number(params.get('turno'));
   const turno = election.rounds.some((r) => r.turno === t) ? (t as 1 | 2) : DEFAULT_TURNO;
   const ufRaw = (params.get('uf') ?? '').toUpperCase();
-  return { electionId: election.id, turno, uf: isUfSigla(ufRaw) ? ufRaw : null };
+  const uf = isUfSigla(ufRaw) ? ufRaw : null;
+  const munRaw = params.get('mun') ?? '';
+  const mun = uf && /^\d{1,5}$/.test(munRaw) ? munRaw.padStart(5, '0') : null;
+  return { electionId: election.id, turno, uf, mun };
 }
 
 export function serializeSelection(sel: Selection): string {
@@ -27,6 +32,7 @@ export function serializeSelection(sel: Selection): string {
   if (sel.electionId !== DEFAULT_ELECTION_ID) params.set('eleicao', sel.electionId);
   params.set('turno', String(sel.turno));
   if (sel.uf) params.set('uf', sel.uf);
+  if (sel.uf && sel.mun) params.set('mun', sel.mun);
   return `?${params.toString()}`;
 }
 
@@ -42,6 +48,8 @@ export function useSelection() {
   const update = useCallback((patch: Partial<Selection>) => {
     setSel((prev) => {
       const next = { ...prev, ...patch };
+      // Trocar de estado (ou voltar ao Brasil) limpa o município selecionado.
+      if ('uf' in patch && patch.uf !== prev.uf && !('mun' in patch)) next.mun = null;
       const url = serializeSelection(next) + window.location.hash;
       window.history.replaceState(null, '', url);
       return next;

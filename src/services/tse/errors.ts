@@ -1,6 +1,7 @@
 export type TseErrorKind =
   | 'not-published'
   | 'http'
+  | 'rate-limited'
   | 'network'
   | 'timeout'
   | 'invalid-json'
@@ -31,6 +32,8 @@ export function describeError(e: unknown): string {
     switch (e.kind) {
       case 'not-published':
         return 'Arquivo ainda não publicado pelo TSE.';
+      case 'rate-limited':
+        return 'O TSE limitou temporariamente as consultas (HTTP 429). Nova tentativa no próximo ciclo.';
       case 'http':
         return `O TSE respondeu com erro HTTP ${e.status ?? ''}.`.trim();
       case 'network':

@@ -3,10 +3,16 @@ import { FILL_COLOR, FILL_LABEL } from './colors';
 
 const ORDER: MapFill[] = ['lula', 'flavio', 'tie', 'no-data', 'unavailable'];
 
-export function MapLegend({ counts }: { counts?: Partial<Record<MapFill, number>> }) {
+export function MapLegend({
+  counts,
+  unit = 'UFs',
+}: {
+  counts?: Partial<Record<MapFill, number>>;
+  unit?: string;
+}) {
   return (
     <ul
-      aria-label="Legenda do mapa"
+      aria-label={`Legenda do mapa (contagem de ${unit})`}
       className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-300 sm:text-xs"
     >
       {ORDER.map((f) => (

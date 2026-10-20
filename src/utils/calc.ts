@@ -72,8 +72,14 @@ export function compareCandidates(result: AreaResult | null, election: ElectionC
   };
 }
 
+/** Entrada com resultado e situação (UF ou município). */
+export interface ResultEntry {
+  status: StateEntry['status'] | 'pending';
+  result: AreaResult | null;
+}
+
 /** Cor do estado no mapa. Nunca deriva cor de nada além dos votos oficiais. */
-export function mapFillFor(entry: StateEntry | undefined, election: ElectionConfig): MapFill {
+export function mapFillFor(entry: ResultEntry | undefined, election: ElectionConfig): MapFill {
   if (!entry || !entry.result || entry.status === 'unavailable' || entry.status === 'invalid') {
     return 'unavailable';
   }
@@ -110,7 +116,7 @@ export function computeProgress(
 
 /** Contagem de UFs lideradas por cada candidato (para o resumo do mapa). */
 export function countStatesByFill(
-  states: Record<string, StateEntry>,
+  states: Record<string, ResultEntry>,
   election: ElectionConfig,
 ): Record<MapFill, number> {
   const counts: Record<MapFill, number> = {

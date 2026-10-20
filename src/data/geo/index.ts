@@ -16,3 +16,18 @@ export async function loadUfGeometry(): Promise<UfFeatureCollection> {
 export function featureSigla(f: UfFeature): UfSigla | null {
   return (ufByIbge(f.properties.codarea)?.sigla as UfSigla | undefined) ?? null;
 }
+
+export type MunFeature = Feature<Polygon | MultiPolygon, { codarea: string }>;
+
+/**
+ * Malha dos municípios de uma UF (IBGE, gerada por scripts/update-geometry.mjs em
+ * public/geo/mun/<uf>.json). Carregada sob demanda e mantida em cache pelo service worker.
+ */
+export async function loadMunicipalGeometry(
+  ufTse: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<UfFeatureCollection> {
+  const res = await fetchImpl(`${import.meta.env.BASE_URL}geo/mun/${ufTse.toLowerCase()}.json`);
+  if (!res.ok) throw new Error(`Malha municipal indisponível (HTTP ${res.status}).`);
+  return (await res.json()) as UfFeatureCollection;
+}

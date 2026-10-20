@@ -1,28 +1,31 @@
-import type { ElectionConfig, ElectionSnapshot } from '../types/election';
+import type { AreaResult, ElectionConfig } from '../types/election';
 import { compareCandidates } from '../utils/calc';
 import { formatInt, formatPct, formatPP } from '../utils/format';
 import { AnimatedNumber } from './AnimatedNumber';
 
-/** Indicadores nacionais compactos (faixa acima do mapa). */
+/** Indicadores compactos da abrangência exibida no mapa (Brasil ou UF aberta). */
 export function KpiStrip({
-  snapshot,
+  result,
   election,
+  scope,
 }: {
-  snapshot: ElectionSnapshot | null;
+  result: AreaResult | null;
   election: ElectionConfig;
+  /** Sufixo dos rótulos quando não é o Brasil (ex.: "SP"). */
+  scope?: string;
 }) {
-  const r = snapshot?.national ?? null;
+  const r = result;
   const cmp = compareCandidates(r, election);
   const [a, b] = election.candidates;
   const cards = [
     {
-      label: a.displayName,
+      label: scope ? `${a.displayName} · ${scope}` : a.displayName,
       accent: 'border-l-lula',
       value: <AnimatedNumber value={cmp.pctValidos[a.key]} format={formatPct} />,
       hint: <AnimatedNumber value={cmp.votes[a.key]} format={formatInt} />,
     },
     {
-      label: b.displayName,
+      label: scope ? `${b.displayName} · ${scope}` : b.displayName,
       accent: 'border-l-flavio',
       value: <AnimatedNumber value={cmp.pctValidos[b.key]} format={formatPct} />,
       hint: <AnimatedNumber value={cmp.votes[b.key]} format={formatInt} />,

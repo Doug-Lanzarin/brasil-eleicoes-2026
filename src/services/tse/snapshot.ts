@@ -94,6 +94,7 @@ export async function loadSnapshot(p: LoadSnapshotParams): Promise<ElectionSnaps
   const national = newest(nationalParsed, previous?.national);
 
   let ab: AbrangenciaIndex | null = null;
+  const abRateLimited = abRaw instanceof TseError && abRaw.kind === 'rate-limited';
   if (!(abRaw instanceof Error)) {
     // Erros de turno/eleição no andamento também invalidam o ciclo.
     ab = parseAbrangencia(abRaw, round.codigoEleicao, turno);
@@ -109,8 +110,10 @@ export async function loadSnapshot(p: LoadSnapshotParams): Promise<ElectionSnaps
   const entries = await mapLimit(targets, concurrency, async ({ code, uf }) => {
     const prevEntry = uf ? previous?.states[uf] : previous?.exterior;
     const stamp = ab?.items.get(code)?.stamp ?? null;
-    if (prevEntry?.result && prevEntry.status === 'ok' && stamp && prevEntry.stamp === stamp) {
-      return prevEntry; // andamento inalterado: reaproveita sem baixar o resultado
+    const unchanged = stamp ? prevEntry?.stamp === stamp : abRateLimited;
+    if (prevEntry?.result && prevEntry.status === 'ok' && unchanged) {
+      // Andamento inalterado (ou indisponível por limite do TSE): reaproveita sem baixar.
+      return prevEntry;
     }
     try {
       const raw = await fetchTseJson(resultUrl(ctx, code), { signal, fetchImpl });

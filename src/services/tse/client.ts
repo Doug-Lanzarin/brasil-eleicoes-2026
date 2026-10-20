@@ -1,9 +1,14 @@
 import { TseError } from './errors';
+import { tseLimiter, type Priority, type RequestLimiter } from './limiter';
 
 export interface FetchJsonOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /** "low" para downloads em massa (municípios); "high" para o painel. */
+  priority?: Priority;
+  /** Limitador global; `null` desativa (uso em testes). */
+  limiter?: RequestLimiter | null;
 }
 
 /**
@@ -15,7 +20,31 @@ export interface FetchJsonOptions {
  */
 export async function fetchTseJson<T = unknown>(
   url: string,
-  { signal, timeoutMs = 20_000, fetchImpl = fetch }: FetchJsonOptions = {},
+  opts: FetchJsonOptions = {},
+): Promise<T> {
+  const limiter = opts.limiter === undefined ? tseLimiter : opts.limiter;
+  if (!limiter) return fetchOnce<T>(url, opts);
+  let release: () => void;
+  try {
+    release = await limiter.acquire(opts.priority ?? 'high', opts.signal);
+  } catch {
+    throw new TseError('aborted', 'Consulta cancelada.', { url });
+  }
+  try {
+    const out = await fetchOnce<T>(url, opts);
+    limiter.report(200);
+    return out;
+  } catch (e) {
+    limiter.report(e instanceof TseError && e.status ? e.status : 'error');
+    throw e;
+  } finally {
+    release();
+  }
+}
+
+async function fetchOnce<T>(
+  url: string,
+  { signal, timeoutMs = 20_000, fetchImpl = fetch }: FetchJsonOptions,
 ): Promise<T> {
   const controller = new AbortController();
   const onAbort = () => controller.abort(signal?.reason);
@@ -48,6 +77,12 @@ export async function fetchTseJson<T = unknown>(
   if (res.status === 404 || res.status === 403) {
     throw new TseError('not-published', 'Arquivo ainda não publicado.', {
       status: res.status,
+      url,
+    });
+  }
+  if (res.status === 429) {
+    throw new TseError('rate-limited', 'Limite de requisições do TSE (HTTP 429).', {
+      status: 429,
       url,
     });
   }

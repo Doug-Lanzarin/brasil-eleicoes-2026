@@ -44,6 +44,17 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
+            // Malhas municipais do IBGE (public/geo/mun/<uf>.json): baixadas só ao abrir
+            // um estado e reaproveitadas depois, inclusive offline.
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.includes('/geo/mun/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'geo-municipios',
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+          {
             // Arquivos de configuração do TSE (lista de municípios, eleições):
             // mudam raramente, podem ser revalidados em segundo plano.
             urlPattern: ({ url }) =>

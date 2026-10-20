@@ -1,15 +1,15 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { appConfig } from '../data/appConfig';
-import { parseAbrangencia, parseMunicipiosConfig, parseResultado } from '../services/tse/adapter';
+import { parseMunicipiosConfig } from '../services/tse/adapter';
 import { fetchTseJson } from '../services/tse/client';
-import { TseError } from '../services/tse/errors';
 import {
-  abrangenciaUrl,
-  municipiosConfigUrl,
-  resultUrl,
-  type PathContext,
-} from '../services/tse/paths';
-import type { AreaResult, ElectionConfig, RoundConfig } from '../types/election';
+  loadMunicipalSnapshot,
+  type MunicipalEntry,
+  type MunicipalSnapshot,
+} from '../services/tse/municipal';
+import { municipiosConfigUrl, type PathContext } from '../services/tse/paths';
+import type { ElectionConfig, RoundConfig } from '../types/election';
 
 export function pathContext(election: ElectionConfig, round: RoundConfig): PathContext {
   return {
@@ -36,78 +36,69 @@ export function useMunicipiosConfig(
   });
 }
 
-/** Andamento por município de uma UF. Atualiza no mesmo intervalo (≥ 30 s) do painel. */
-export function useMunicipiosAndamento(
-  election: ElectionConfig,
-  round: RoundConfig,
-  uf: string,
-  enabled: boolean,
-) {
-  const ctx = pathContext(election, round);
-  return useQuery({
-    queryKey: ['tse', 'ab', round.codigoEleicao, uf],
-    queryFn: async ({ signal }) =>
-      parseAbrangencia(
-        await fetchTseJson(abrangenciaUrl(ctx, uf), { signal }),
-        round.codigoEleicao,
-        round.turno,
-      ),
-    enabled,
-    refetchInterval: appConfig.refreshSeconds * 1000,
-    staleTime: appConfig.refreshSeconds * 1000,
-  });
-}
-
-export type MunicipioResultMap = Map<string, AreaResult | TseError>;
-
-async function mapLimit<T>(items: T[], limit: number, fn: (t: T) => Promise<void>) {
-  let i = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (i < items.length) await fn(items[i++]!);
-    }),
-  );
-}
-
 /**
- * Resultados de todos os municípios de uma UF (um arquivo por município).
- * Carregado somente por ação explícita do usuário e sem atualização automática,
- * para não multiplicar consultas ao TSE.
+ * Resultados municipais da UF aberta, atualizados no mesmo intervalo do painel (≥ 30 s).
+ * O TanStack Query não sobrepõe execuções da mesma chave; a cada ciclo só os municípios
+ * com andamento alterado são baixados novamente.
  */
-export function useMunicipiosResultados(
+export function useMunicipalResults(
   election: ElectionConfig,
   round: RoundConfig,
-  uf: string,
-  codigos: string[],
-  enabled: boolean,
+  uf: string | null,
 ) {
-  const ctx = pathContext(election, round);
-  return useQuery({
-    queryKey: ['tse', 'mu-all', round.codigoEleicao, uf, codigos.length],
+  const queryClient = useQueryClient();
+  const cm = useMunicipiosConfig(election, round, !!uf);
+  const municipios = uf ? cm.data?.get(uf) : undefined;
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [partial, setPartial] = useState<{
+    key: string;
+    entries: Record<string, MunicipalEntry>;
+  } | null>(null);
+  const key = ['tse', 'mu-uf', round.codigoEleicao, uf];
+
+  const query = useQuery({
+    queryKey: key,
     queryFn: async ({ signal }) => {
-      const out: MunicipioResultMap = new Map();
-      await mapLimit(codigos, 4, async (cod) => {
-        try {
-          const raw = await fetchTseJson(resultUrl(ctx, uf, cod), { signal });
-          out.set(
-            cod,
-            parseResultado(raw, {
-              codigoEleicao: round.codigoEleicao,
-              turno: round.turno,
-              cargo: election.cargo,
-              tipo: 'mu',
-              codigo: cod,
-            }),
-          );
-        } catch (e) {
-          if (e instanceof TseError && e.kind === 'aborted') throw e;
-          out.set(cod, e instanceof TseError ? e : new TseError('invalid-data', String(e)));
-        }
+      const snap = await loadMunicipalSnapshot({
+        base: appConfig.tseBaseUrl,
+        election,
+        round,
+        uf: uf!,
+        municipios: municipios!,
+        previous: queryClient.getQueryData<MunicipalSnapshot>(key),
+        signal,
+        onProgress: (done, total) => setProgress({ done, total }),
+        onPartial: (entries) => setPartial({ key: `${round.codigoEleicao}:${uf}`, entries }),
       });
-      return out;
+      setProgress(null);
+      setPartial(null);
+      return snap;
     },
-    enabled: enabled && codigos.length > 0,
+    enabled: !!uf && !!municipios,
+    refetchInterval: appConfig.refreshSeconds * 1000,
+    refetchIntervalInBackground: false,
     staleTime: appConfig.refreshSeconds * 1000,
-    refetchInterval: false,
   });
+
+  // Antes do primeiro ciclo completo, mostra o que já chegou (o mapa vai se preenchendo).
+  const partialSnapshot: MunicipalSnapshot | null =
+    !query.data && partial && partial.key === `${round.codigoEleicao}:${uf}`
+      ? {
+          electionId: election.id,
+          turno: round.turno,
+          codigoEleicao: round.codigoEleicao,
+          uf: uf!,
+          entries: partial.entries,
+          fetchedAt: new Date(0).toISOString(),
+        }
+      : null;
+
+  return {
+    snapshot: query.data ?? partialSnapshot,
+    isLoading: !!uf && (cm.isLoading || query.isLoading),
+    isFetching: query.isFetching,
+    error: cm.error ?? query.error,
+    progress,
+    municipios: municipios ?? [],
+  };
 }

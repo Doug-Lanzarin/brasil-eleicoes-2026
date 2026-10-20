@@ -5,6 +5,10 @@ de divulgação do TSE**. O mapa do Brasil (malha oficial do IBGE) colore cada U
 recebeu mais votos entre **Lula** (vermelho) e **Flávio Bolsonaro** (azul), com totais
 nacionais, detalhamento por estado e por município, e suporte a 1º e 2º turno.
 
+Ao clicar num estado, o mapa passa a mostrar **somente aquele estado, dividido por
+municípios** (malha do IBGE), cada um colorido pelo resultado oficial do município. Clicar
+numa cidade abre o detalhe dela; "← Brasil" volta ao mapa nacional.
+
 - Dados: `https://resultados.tse.jus.br/oficial` (sem scraping de HTML, sem dados inventados).
 - Geometrias: IBGE — API de Malhas Territoriais v3 (27 UFs).
 - Atualização automática a cada 30 s (mínimo garantido), sem requisições simultâneas.
@@ -27,7 +31,7 @@ npm run preview       # serve o build em http://localhost:4173 (teste do PWA)
 npm test              # testes (Vitest + Testing Library)
 npm run lint          # ESLint
 npm run format        # Prettier (format:check para apenas verificar)
-npm run geo:update    # baixa novamente a malha das UFs do IBGE
+npm run geo:update    # baixa novamente as malhas do IBGE (UFs e municípios)
 npm run fixtures:serve  # servidor local com dados FICTÍCIOS (ver "Testar sem dados reais")
 npm run icons         # regera os ícones PNG do PWA (requer Playwright)
 ```
@@ -54,7 +58,8 @@ para o botão "Atualizar" e para a reconexão. Em caso de falhas, o intervalo cr
 ## Como selecionar o turno
 
 - Na interface: seletor **1º turno / 2º turno** (no topo no desktop; barra inferior no celular).
-- Por link: `?turno=2`, opcionalmente com estado: `?turno=2&uf=SP`.
+- Por link: `?turno=2`, opcionalmente com estado e município (código TSE):
+  `?turno=2&uf=SP` ou `?turno=1&uf=SP&mun=71072`.
 - Padrão do build: `VITE_DEFAULT_TURNO`.
 
 Ao trocar de turno, o agendador anterior é parado (requisição em curso cancelada), os dados e
@@ -127,17 +132,32 @@ revalidados por ETag (HTTP 304). Ver `docs/INTEGRACAO-TSE.md` para o plano caso 
 
 ## Mapa e geometrias
 
-A malha vem da API de Malhas do IBGE (`qualidade=intermediaria`, ~250 KB, carregada em chunk
-separado e pré-cacheada pelo service worker). Para atualizar:
+As malhas vêm da API de Malhas do IBGE:
+
+- **UFs** (`src/data/geo/br-uf.json`, `qualidade=intermediaria`, ~250 KB): chunk separado,
+  pré-cacheado pelo service worker.
+- **Municípios** (`public/geo/mun/<uf>.json`, `qualidade=minima`, 3,2 MB no total, de 4 KB no
+  DF a 455 KB em MG): baixados só quando o estado é aberto e guardados pelo service worker
+  (CacheFirst, 30 dias) — funcionam offline depois da primeira visita.
+
+Para atualizar:
 
 ```bash
-npm run geo:update                         # padrão: intermediaria
-npm run geo:update -- --qualidade=minima   # mais leve
-npm test -- ufs                            # valida as 27 UFs e as correspondências
+npm run geo:update                               # UFs + municípios
+npm run geo:update -- --so-ufs                   # apenas UFs
+npm run geo:update -- --qualidade-mun=intermediaria   # municípios com mais detalhe (~3x maior)
+npm test -- ufs municipalGeometry                # valida as malhas
 ```
 
-O script verifica que existem exatamente as 27 UFs e corrige a orientação dos polígonos para
-o d3-geo. A correspondência UF ↔ código IBGE ↔ código TSE está em `src/data/ufs.ts` e é
+O script verifica que existem exatamente as 27 UFs, **confere os códigos IBGE dos municípios
+da malha com a lista oficial do TSE** (`cdi` em `mun-e006257-cm.json`) e corrige a orientação
+dos polígonos para o d3-geo. Na versão atual, a única divergência é **Boa Esperança do Norte
+(MT, IBGE 5101837)**, município recente que está na lista do TSE mas ainda não tem polígono
+na malha do IBGE: ele aparece na lista de municípios (marcado "fora do mapa") com os
+resultados oficiais, mas não no mapa.
+
+A ligação entre o polígono do município (código IBGE) e o resultado (código TSE de 5
+dígitos) usa o campo `cdi` da lista oficial de municípios do TSE. A correspondência UF ↔ código IBGE ↔ código TSE está em `src/data/ufs.ts` e é
 testada contra a malha e contra a lista oficial de UFs do TSE.
 
 Interação: passar o mouse/focar mostra nome e sigla; clique, toque ou Enter abre o
@@ -172,7 +192,7 @@ manifesto.
 
 ## Testes
 
-`npm test` executa 66 testes, cobrindo:
+`npm test` executa 84 testes, cobrindo:
 
 1. identificação de Lula e Flávio por `sqcand` + número (`calc.test.ts`);
 2. percentuais sobre válidos e conferência com o percentual oficial;
@@ -186,7 +206,10 @@ manifesto.
 10. preservação dos últimos dados válidos após erro (por UF e global) e persistência;
 11. correspondência UF ↔ IBGE ↔ TSE ↔ geometria (e orientação dos polígonos);
 12. renderização e interação em 1440 px (painel lateral, teclado, lista) e 390 px (bottom
-    sheet, barra inferior, KPIs).
+    sheet, barra inferior, KPIs);
+13. mapa por municípios: abrir o estado, cores por município, seleção pelo mapa e pela lista,
+    voltar ao Brasil; carregamento municipal (só o que mudou, 429, turno errado);
+14. limitador de requisições e malhas municipais (5.570 polígonos, códigos por UF).
 
 ## Limitações conhecidas
 
@@ -194,8 +217,13 @@ manifesto.
   integração foi validada diretamente nos arquivos oficiais (ver `docs/INTEGRACAO-TSE.md`).
 - Os significados de `and` e `tf` foram inferidos dos arquivos (valores observados em turnos
   concluídos e não iniciados). O status "finalizada" só é usado com `tf = s`.
-- Votos municipais exigem um arquivo por município; por isso só são baixados quando o usuário
-  pede ("Carregar votos dos N municípios") e não são atualizados automaticamente.
+- Votos municipais exigem **um arquivo por município**. Ao abrir um estado, todos são
+  baixados com prioridade baixa e ritmo controlado (até 3 simultâneos, ~6/s), porque o TSE
+  responde HTTP 429 a rajadas. O mapa vai se colorindo conforme chegam; São Paulo (645
+  municípios) levou ~100 s no teste, Minas Gerais (853) leva mais. Depois disso, a cada 30 s
+  só são baixados os municípios cujo andamento mudou.
+- Em caso de HTTP 429, todas as consultas ao TSE pausam (5 s, dobrando até 60 s) e o arquivo
+  recusado só é tentado de novo no ciclo seguinte.
 - O exterior (`zz`) entra no total nacional, mas não aparece no mapa (é mostrado à parte).
 - O `sqcand` dos candidatos está fixado na configuração; se o TSE alterar o identificador, a
   interface mostra o aviso de integridade e a UF fica "sem dados" até a configuração ser

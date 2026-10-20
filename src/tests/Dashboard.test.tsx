@@ -1,11 +1,20 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { createQueryClient } from '../queryClient';
 import { ElectionStore } from '../services/electionStore';
 import type { ElectionConfig, RoundConfig } from '../types/election';
-import { cand, defaultRouter, FIXTURE_FLAVIO, FIXTURE_LULA, mockFetch } from './fixtures/tse';
+import {
+  cand,
+  defaultRouter,
+  FIXTURE_FLAVIO,
+  FIXTURE_LULA,
+  makeResultado,
+  mockFetch,
+} from './fixtures/tse';
 
 function setViewport(width: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
@@ -178,5 +187,87 @@ describe('Dashboard', () => {
       await waitFor(() => expect(within(kpi).getByText('55,56%')).toBeInTheDocument());
       expect(within(kpi).getByText('44,44%')).toBeInTheDocument();
     });
+  });
+
+  describe('estado aberto por municípios', () => {
+    // Malha real do IBGE para o Acre + lista de municípios FICTÍCIA ligada aos códigos IBGE.
+    const acGeo = readFileSync(resolve(__dirname, '../../public/geo/mun/ac.json'), 'utf8');
+    const acCodes: string[] = JSON.parse(acGeo).features.map(
+      (f: { properties: { codarea: string } }) => f.properties.codarea,
+    );
+    const muns = acCodes.map((cdi, i) => ({
+      cd: String(10000 + i),
+      cdi,
+      nm: `MUNICÍPIO FICTÍCIO ${i}`,
+      c: i === 0 ? 's' : 'n',
+    }));
+
+    beforeEach(() => {
+      setViewport(1440);
+      const global = mockFetch((url) => {
+        if (url.endsWith('/geo/mun/ac.json')) return JSON.parse(acGeo);
+        if (url.endsWith('/config/mun-e006257-cm.json')) {
+          return {
+            dg: '01/10/2026',
+            hg: '10:00:00',
+            idg: '1',
+            abr: [{ cd: 'ac', ds: 'ACRE', mu: muns }],
+          };
+        }
+        if (url.endsWith('/dados/ac/ac-e006257-ab.json')) return undefined; // sem andamento: consulta todos
+        const m = /ac(\d{5})-c0001-e006257-u\.json$/.exec(url);
+        if (m) {
+          const flavioLeads = m[1] === '10000';
+          return makeResultado({
+            tpabr: 'mu',
+            cdabr: m[1],
+            candidates: flavioLeads
+              ? [cand(FIXTURE_LULA, 10), cand(FIXTURE_FLAVIO, 90)]
+              : [cand(FIXTURE_LULA, 60), cand(FIXTURE_FLAVIO, 40)],
+          });
+        }
+        return undefined;
+      });
+      vi.stubGlobal('fetch', global.impl);
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('ao clicar no estado mostra só o estado, dividido e colorido por município', async () => {
+      const { user } = setup();
+      await user.click(await mapPath('AC'));
+      const stateMap = await screen.findByTestId('state-map');
+      expect(screen.queryByTestId('brazil-map')).toBeNull();
+      await waitFor(() =>
+        expect(stateMap.querySelectorAll('path[data-mun]').length).toBe(acCodes.length),
+      );
+      await waitFor(
+        () =>
+          expect(stateMap.querySelector('path[data-mun="10000"]')!.getAttribute('data-fill')).toBe(
+            'flavio',
+          ),
+        // O limitador espaça as requisições municipais (150 ms): 22 municípios ≈ 3,5 s.
+        { timeout: 10_000 },
+      );
+      expect(stateMap.querySelector('path[data-mun="10001"]')!.getAttribute('data-fill')).toBe(
+        'lula',
+      );
+      expect(screen.getByText('Lula · AC')).toBeInTheDocument();
+
+      // Clicar num município abre o detalhe dele.
+      await user.click(stateMap.querySelector('path[data-mun="10000"]')!);
+      const munDetail = await screen.findByTestId('municipality-detail');
+      expect(within(munDetail).getByText(/Município Fictício 0/)).toBeInTheDocument();
+      expect(within(munDetail).getAllByText('90,00%').length).toBeGreaterThan(0);
+      expect(window.location.search).toContain('mun=10000');
+
+      // A lista de municípios também seleciona.
+      await user.click(screen.getByRole('button', { name: /Município Fictício 1: Lula à frente/ }));
+      expect(window.location.search).toContain('mun=10001');
+
+      // Voltar ao Brasil.
+      await user.click(screen.getByRole('button', { name: '← Brasil' }));
+      expect(await screen.findByTestId('brazil-map')).toBeInTheDocument();
+      expect(window.location.search).not.toContain('mun=');
+    }, 20_000);
   });
 });

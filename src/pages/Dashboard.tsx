@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { KpiStrip } from '../components/KpiStrip';
 import { BrazilMap } from '../components/map/BrazilMap';
+import { StateMap } from '../components/map/StateMap';
 import { MapLegend } from '../components/map/MapLegend';
 import { NationalPanel } from '../components/NationalPanel';
 import { PwaStatus } from '../components/PwaStatus';
@@ -19,7 +20,8 @@ import {
 } from '../features/election/ElectionControls';
 import { useSelection } from '../features/election/useSelection';
 import { useElectionData } from '../hooks/useElectionData';
-import { useUfGeometry } from '../hooks/useGeometry';
+import { useMunicipalGeometry, useUfGeometry } from '../hooks/useGeometry';
+import { useMunicipalResults } from '../hooks/useMunicipal';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useNow } from '../hooks/useNow';
 import type { ElectionStore } from '../services/electionStore';
@@ -41,6 +43,9 @@ export function Dashboard({ storeFactory }: DashboardProps) {
   const isDesktop = useMediaQuery('(min-width: 1024px)', true);
   const queryClient = useQueryClient();
   const snapshot = state.snapshot;
+  const ufTse = sel.uf ? ufBySigla(sel.uf)!.tse : null;
+  const municipal = useMunicipalResults(election, round, ufTse);
+  const munGeometry = useMunicipalGeometry(ufTse);
 
   // Ao trocar de turno, descarta caches municipais de outros turnos.
   useEffect(() => {
@@ -73,9 +78,21 @@ export function Dashboard({ storeFactory }: DashboardProps) {
     () => countStatesByFill(snapshot?.states ?? {}, election),
     [snapshot, election],
   );
+  const munCounts = useMemo(
+    () => countStatesByFill(municipal.snapshot?.entries ?? {}, election),
+    [municipal.snapshot, election],
+  );
+
+  // Municípios da lista oficial sem polígono na malha do IBGE (ex.: criados recentemente).
+  const missingGeometry = useMemo(() => {
+    if (!munGeometry.data) return undefined;
+    const ibge = new Set(munGeometry.data.features.map((f) => String(f.properties.codarea)));
+    return new Set(municipal.municipios.filter((m) => !ibge.has(m.ibge)).map((m) => m.codigo));
+  }, [munGeometry.data, municipal.municipios]);
 
   const selectUf = useCallback((uf: UfSigla | null) => setSel({ uf }), [setSel]);
   const closeUf = useCallback(() => setSel({ uf: null }), [setSel]);
+  const selectMun = useCallback((mun: string | null) => setSel({ mun }), [setSel]);
 
   const detail = sel.uf ? (
     <StateDetail
@@ -83,9 +100,14 @@ export function Dashboard({ storeFactory }: DashboardProps) {
       snapshot={snapshot}
       election={election}
       round={round}
+      municipal={{ ...municipal, missingGeometry }}
+      selectedMun={sel.mun}
+      onSelectMun={selectMun}
       onClose={closeUf}
     />
   ) : null;
+
+  const stateResult = sel.uf ? (snapshot?.states[sel.uf]?.result ?? null) : null;
 
   const nationalBody = snapshot ? (
     <NationalPanel snapshot={snapshot} election={election} counts={counts} compact={isDesktop} />
@@ -138,9 +160,42 @@ export function Dashboard({ storeFactory }: DashboardProps) {
         <div className="mx-auto grid max-w-[1600px] gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
           <div className="min-w-0 space-y-3">
             <DataNotices state={state} now={now} />
-            <KpiStrip snapshot={snapshot} election={election} />
+            <KpiStrip
+              result={sel.uf ? stateResult : (snapshot?.national ?? null)}
+              election={election}
+              scope={sel.uf ?? undefined}
+            />
             <div className="relative h-[56dvh] min-h-[320px] overflow-hidden rounded-xl border border-ink-800 bg-ink-950/40 lg:h-[calc(100dvh-260px)] lg:min-h-[520px]">
-              {geometry.data ? (
+              {sel.uf ? (
+                munGeometry.data && municipal.municipios.length > 0 ? (
+                  <StateMap
+                    uf={sel.uf}
+                    geometry={munGeometry.data}
+                    municipios={municipal.municipios}
+                    snapshot={municipal.snapshot}
+                    election={election}
+                    selected={sel.mun}
+                    onSelect={selectMun}
+                    onBack={closeUf}
+                    progress={municipal.progress}
+                  />
+                ) : (
+                  <div className="grid h-full place-content-center justify-items-center gap-2 text-sm text-ink-400">
+                    <span role="status">
+                      {munGeometry.isError || municipal.error
+                        ? 'Não foi possível carregar os municípios.'
+                        : `Carregando municípios de ${ufBySigla(sel.uf)?.nome}…`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={closeUf}
+                      className="rounded-md border border-ink-600 px-3 py-1.5 text-ink-200 hover:bg-ink-700"
+                    >
+                      ← Brasil
+                    </button>
+                  </div>
+                )
+              ) : geometry.data ? (
                 <BrazilMap
                   geometry={geometry.data}
                   fills={fills}
@@ -153,11 +208,11 @@ export function Dashboard({ storeFactory }: DashboardProps) {
                   {geometry.isError ? 'Não foi possível carregar o mapa.' : 'Carregando mapa…'}
                 </div>
               )}
-              {snapshot?.exterior?.result && (
+              {!sel.uf && snapshot?.exterior?.result && (
                 <ExteriorBadge snapshot={snapshot} election={election} />
               )}
             </div>
-            <MapLegend counts={counts} />
+            <MapLegend counts={sel.uf ? munCounts : counts} unit={sel.uf ? 'municípios' : 'UFs'} />
           </div>
 
           <aside className="min-w-0 space-y-4 lg:max-h-[calc(100dvh-140px)] lg:overflow-y-auto lg:pr-1">

@@ -132,12 +132,8 @@ describe('cor dos estados', () => {
   });
   it('estado sem resultado disponível → indisponível', () => {
     expect(mapFillFor(undefined, election)).toBe('unavailable');
-    expect(
-      mapFillFor({ uf: 'SP', status: 'unavailable', result: null, stamp: null }, election),
-    ).toBe('unavailable');
-    expect(mapFillFor({ uf: 'SP', status: 'invalid', result: null, stamp: null }, election)).toBe(
-      'unavailable',
-    );
+    expect(mapFillFor({ status: 'unavailable', result: null }, election)).toBe('unavailable');
+    expect(mapFillFor({ status: 'invalid', result: null }, election)).toBe('unavailable');
   });
   it('candidato ausente no arquivo → sem dados (não presume zero)', () => {
     const e = entry({ candidates: [cand(FIXTURE_LULA, 10), cand(FIXTURE_OTHER, 5)] });
