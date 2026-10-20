@@ -1,10 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0b1220"/>
-  <defs><clipPath id="c"><circle cx="256" cy="256" r="150"/></clipPath></defs>
-  <g clip-path="url(#c)">
-    <rect x="0" y="0" width="256" height="512" fill="#e5383b"/>
-    <rect x="256" y="0" width="256" height="512" fill="#2f6fe4"/>
-  </g>
-  <circle cx="256" cy="256" r="150" fill="none" stroke="#e6ebf3" stroke-width="14"/>
-  <rect x="246" y="96" width="20" height="320" fill="#0b1220"/>
+  <title>Brasil Eleitoral</title>
+  <rect width="512" height="512" rx="112" fill="#009C3B"/>
+  <path d="M256 66 L462 256 L256 446 L50 256 Z" fill="#FFDF00"/>
+  <circle cx="256" cy="256" r="116" fill="#002776"/>
+  <path d="M198 260 L240 302 L318 214" fill="none" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
