@@ -239,7 +239,7 @@ mostra sempre a cobertura e a idade do cálculo.
 
 ## Testes
 
-`npm test` executa 100 testes, cobrindo:
+`npm test` executa 107 testes, cobrindo:
 
 1. identificação de Lula e Flávio por `sqcand` + número (`calc.test.ts`);
 2. percentuais sobre válidos e conferência com o percentual oficial;
@@ -261,7 +261,10 @@ mostra sempre a cobertura e a idade do cálculo.
     zona (nulos técnicos, seções sem BU), validação do arquivo (rejeita outro turno/UF, somas
     inconsistentes) e interface (cidade aproximada no mapa, cartões por zona, aviso sem dados);
 16. cache municipal: salva/recupera, nunca mistura turno/UF, expira, e reabrir o estado não
-    baixa de novo municípios inalterados.
+    baixa de novo municípios inalterados;
+17. pré-carregamento: percorre as UFs, salva no cache, só baixa o que mudou, pula UF aberta e
+    UF finalizada completa, pausa/retoma, respeita economia de dados/celular/conexão lenta, e
+    a prioridade "background" do limitador cede ao primeiro plano.
 
 ## Limitações conhecidas
 
@@ -280,6 +283,16 @@ mostra sempre a cobertura e a idade do cálculo.
   O progresso parcial também é salvo (a cada ~5 s), então sair no meio não perde o trabalho.
   Teste real: SP levou 102 s na 1ª visita e 0,5 s ao recarregar a página, sem baixar
   nenhum arquivo municipal. Só os candidatos configurados são guardados, para ocupar pouco.
+- **Pré-carregamento:** depois que o painel nacional carrega, o app baixa em segundo plano os
+  municípios de todas as UFs (menos municípios primeiro) e guarda no cache, para que abrir
+  qualquer estado seja instantâneo. Usa a prioridade mais baixa do limitador (só usa o TSE
+  quando o painel e o estado aberto não estão pedindo nada; até 2 requisições simultâneas,
+  ~5/s): o país inteiro leva ~20 min na 1ª vez (~50 MB); depois, a cada 5 min, só o que mudou,
+  e UFs finalizadas com cache completo são puladas. Não roda com economia de dados, rede
+  celular ou conexão lenta (quando o navegador informa), pausa com a aba em segundo plano ou
+  sem conexão, e tem botão Ligar/Desligar (preferência salva no aparelho). Teste real: após
+  2 min sem clicar em nada, 10 UFs prontas, painel sempre atualizado, nenhum HTTP 429; abrir
+  Roraima levou 0,1 s.
 - Em caso de HTTP 429, todas as consultas ao TSE pausam (5 s, dobrando até 60 s) e o arquivo
   recusado só é tentado de novo no ciclo seguinte.
 - O exterior (`zz`) entra no total nacional, mas não aparece no mapa (é mostrado à parte).

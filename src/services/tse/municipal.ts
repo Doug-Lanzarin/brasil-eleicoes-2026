@@ -10,7 +10,7 @@
 import type { AreaResult, ElectionConfig, RoundConfig } from '../../types/election';
 import { parseAbrangencia, parseResultado, type MunicipioInfo } from './adapter';
 import { fetchTseJson } from './client';
-import type { RequestLimiter } from './limiter';
+import type { Priority, RequestLimiter } from './limiter';
 import { describeError, TseError } from './errors';
 import { abrangenciaUrl, resultUrl, type PathContext } from './paths';
 
@@ -50,6 +50,8 @@ export interface LoadMunicipalParams {
   onPartial?: (entries: Record<string, MunicipalEntry>) => void;
   /** Limitador de requisições (padrão: o global da aplicação; `null` desativa). */
   limiter?: RequestLimiter | null;
+  /** "low" para o estado aberto; "background" para o pré-carregamento. */
+  priority?: Priority;
 }
 
 export async function loadMunicipalSnapshot(p: LoadMunicipalParams): Promise<MunicipalSnapshot> {
@@ -70,7 +72,7 @@ export async function loadMunicipalSnapshot(p: LoadMunicipalParams): Promise<Mun
       ? p.previous
       : null;
 
-  const opts = { signal, fetchImpl, priority: 'low' as const, limiter: p.limiter };
+  const opts = { signal, fetchImpl, priority: p.priority ?? 'low', limiter: p.limiter };
   let stamps: Map<string, string> | null = null;
   let abRateLimited = false;
   try {

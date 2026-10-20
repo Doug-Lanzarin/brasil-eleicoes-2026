@@ -23,6 +23,8 @@ import { useSelection } from '../features/election/useSelection';
 import { useElectionData } from '../hooks/useElectionData';
 import { useMunicipalGeometry, useUfGeometry } from '../hooks/useGeometry';
 import { useMunicipalResults } from '../hooks/useMunicipal';
+import { useMunicipalPrefetch } from '../hooks/useMunicipalPrefetch';
+import { PrefetchIndicator } from '../components/PrefetchIndicator';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useNow } from '../hooks/useNow';
 import type { ElectionStore } from '../services/electionStore';
@@ -47,6 +49,7 @@ export function Dashboard({ storeFactory }: DashboardProps) {
   const ufTse = sel.uf ? ufBySigla(sel.uf)!.tse : null;
   const municipal = useMunicipalResults(election, round, ufTse);
   const munGeometry = useMunicipalGeometry(ufTse);
+  const prefetch = useMunicipalPrefetch(election, round, ufTse, snapshot);
 
   // Remove do aparelho resultados municipais expirados.
   useEffect(() => {
@@ -221,6 +224,13 @@ export function Dashboard({ storeFactory }: DashboardProps) {
               )}
             </div>
             <MapLegend counts={sel.uf ? munCounts : counts} unit={sel.uf ? 'municípios' : 'UFs'} />
+            <PrefetchIndicator
+              enabled={prefetch.enabled}
+              setEnabled={prefetch.setEnabled}
+              status={prefetch.status}
+              connection={prefetch.connection}
+              now={now}
+            />
           </div>
 
           <aside className="min-w-0 space-y-4 lg:max-h-[calc(100dvh-140px)] lg:overflow-y-auto lg:pr-1">

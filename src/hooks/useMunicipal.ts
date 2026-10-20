@@ -21,20 +21,24 @@ export function pathContext(election: ElectionConfig, round: RoundConfig): PathC
   };
 }
 
+/** Consulta da lista oficial de municípios (compartilhada com o pré-carregamento). */
+export function municipiosConfigQuery(election: ElectionConfig, round: RoundConfig) {
+  const ctx = pathContext(election, round);
+  return {
+    queryKey: ['tse', 'cm', round.codigoEleicao],
+    queryFn: async ({ signal }: { signal: AbortSignal }) =>
+      parseMunicipiosConfig(await fetchTseJson(municipiosConfigUrl(ctx), { signal })),
+    staleTime: 60 * 60 * 1000,
+  };
+}
+
 /** Lista oficial de municípios (muda raramente). */
 export function useMunicipiosConfig(
   election: ElectionConfig,
   round: RoundConfig,
   enabled: boolean,
 ) {
-  const ctx = pathContext(election, round);
-  return useQuery({
-    queryKey: ['tse', 'cm', round.codigoEleicao],
-    queryFn: async ({ signal }) =>
-      parseMunicipiosConfig(await fetchTseJson(municipiosConfigUrl(ctx), { signal })),
-    enabled,
-    staleTime: 60 * 60 * 1000,
-  });
+  return useQuery({ ...municipiosConfigQuery(election, round), enabled });
 }
 
 /**

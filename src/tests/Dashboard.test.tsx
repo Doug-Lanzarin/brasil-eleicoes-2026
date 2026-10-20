@@ -150,6 +150,16 @@ describe('Dashboard', () => {
       ).toBe(true);
     });
 
+    it('mostra o pré-carregamento dos municípios e permite desligar', async () => {
+      const { user } = setup();
+      const ind = await screen.findByTestId('prefetch-indicator');
+      expect(ind.dataset.state).not.toBe('off');
+      await user.click(within(ind).getByRole('button', { name: 'Desligar' }));
+      expect(screen.getByTestId('prefetch-indicator').dataset.state).toBe('off');
+      expect(localStorage.getItem('brasil-eleitoral:prefetch-municipios')).toBe('off');
+      expect(screen.getByText(/Pré-carregamento dos municípios desligado/)).toBeInTheDocument();
+    });
+
     it('seleciona estado pela lista acessível', async () => {
       const { user } = setup();
       await mapPath('SP');
