@@ -15,7 +15,14 @@ const svg = await readFile('public/favicon.svg', 'utf8');
 const targets = [
   { file: 'public/pwa-192x192.png', size: 192, pad: 0 },
   { file: 'public/pwa-512x512.png', size: 512, pad: 0 },
-  { file: 'public/apple-touch-icon.png', size: 180, pad: 0, bg: '#009C3B' }, // iOS não aceita transparência
+  // iPhone/iPad: fundo sólido (o iOS não aceita transparência) e todos os nomes que o
+  // Safari procura na raiz do site, além dos declarados no index.html.
+  { file: 'public/apple-touch-icon.png', size: 180, pad: 0, bg: '#009C3B' },
+  { file: 'public/apple-touch-icon-precomposed.png', size: 180, pad: 0, bg: '#009C3B' },
+  { file: 'public/apple-touch-icon-180x180.png', size: 180, pad: 0, bg: '#009C3B' },
+  { file: 'public/apple-touch-icon-167x167.png', size: 167, pad: 0, bg: '#009C3B' },
+  { file: 'public/apple-touch-icon-152x152.png', size: 152, pad: 0, bg: '#009C3B' },
+  { file: 'public/apple-touch-icon-120x120.png', size: 120, pad: 0, bg: '#009C3B' },
   // Ícone "maskable": área segura de 80%, fundo verde sólido (o sistema recorta o formato).
   { file: 'public/maskable-512x512.png', size: 512, pad: 0.12, bg: '#009C3B' },
 ];
