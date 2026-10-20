@@ -239,7 +239,7 @@ mostra sempre a cobertura e a idade do cálculo.
 
 ## Testes
 
-`npm test` executa 95 testes, cobrindo:
+`npm test` executa 100 testes, cobrindo:
 
 1. identificação de Lula e Flávio por `sqcand` + número (`calc.test.ts`);
 2. percentuais sobre válidos e conferência com o percentual oficial;
@@ -259,7 +259,9 @@ mostra sempre a cobertura e a idade do cálculo.
 14. limitador de requisições e malhas municipais (5.570 polígonos, códigos por UF);
 15. zonas: decodificador do BU (amostra real conferida com o arquivo oficial), agregação por
     zona (nulos técnicos, seções sem BU), validação do arquivo (rejeita outro turno/UF, somas
-    inconsistentes) e interface (cidade aproximada no mapa, cartões por zona, aviso sem dados).
+    inconsistentes) e interface (cidade aproximada no mapa, cartões por zona, aviso sem dados);
+16. cache municipal: salva/recupera, nunca mistura turno/UF, expira, e reabrir o estado não
+    baixa de novo municípios inalterados.
 
 ## Limitações conhecidas
 
@@ -272,6 +274,12 @@ mostra sempre a cobertura e a idade do cálculo.
   responde HTTP 429 a rajadas. O mapa vai se colorindo conforme chegam; São Paulo (645
   municípios) levou ~100 s no teste, Minas Gerais (853) leva mais. Depois disso, a cada 30 s
   só são baixados os municípios cujo andamento mudou.
+- **Cache no aparelho:** os resultados municipais de cada estado ficam salvos no IndexedDB
+  (por eleição, turno e UF; expiram em 7 dias). Ao reabrir um estado, o mapa aparece na hora
+  e só os municípios cujo andamento mudou são baixados — com a apuração encerrada, nenhum.
+  O progresso parcial também é salvo (a cada ~5 s), então sair no meio não perde o trabalho.
+  Teste real: SP levou 102 s na 1ª visita e 0,5 s ao recarregar a página, sem baixar
+  nenhum arquivo municipal. Só os candidatos configurados são guardados, para ocupar pouco.
 - Em caso de HTTP 429, todas as consultas ao TSE pausam (5 s, dobrando até 60 s) e o arquivo
   recusado só é tentado de novo no ciclo seguinte.
 - O exterior (`zz`) entra no total nacional, mas não aparece no mapa (é mostrado à parte).

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -241,8 +241,13 @@ describe('Dashboard', () => {
       },
     };
 
+    /** Andamento por município (FICTÍCIO). Sem ele, todos os municípios são consultados. */
+    let abMunicipal: unknown = undefined;
+    let globalCalls: string[] = [];
+
     beforeEach(() => {
       setViewport(1440);
+      abMunicipal = undefined;
       const global = mockFetch((url) => {
         if (url.endsWith('/geo/mun/ac.json')) return JSON.parse(acGeo);
         if (url.endsWith('/config/mun-e006257-cm.json')) {
@@ -253,7 +258,7 @@ describe('Dashboard', () => {
             abr: [{ cd: 'ac', ds: 'ACRE', mu: muns }],
           };
         }
-        if (url.endsWith('/dados/ac/ac-e006257-ab.json')) return undefined; // sem andamento: consulta todos
+        if (url.endsWith('/dados/ac/ac-e006257-ab.json')) return abMunicipal;
         if (url.endsWith('/zonas/6257/ac.json')) return zonasFixture;
         const m = /ac(\d{5})-c0001-e006257-u\.json$/.exec(url);
         if (m) {
@@ -268,6 +273,7 @@ describe('Dashboard', () => {
         }
         return undefined;
       });
+      globalCalls = global.calls;
       vi.stubGlobal('fetch', global.impl);
     });
     afterEach(() => vi.unstubAllGlobals());
@@ -334,5 +340,67 @@ describe('Dashboard', () => {
         await screen.findByText(/Resultados por zona ainda não disponíveis/),
       ).toBeInTheDocument();
     }, 20_000);
+
+    it('guarda os municípios no aparelho e reabre sem baixar tudo de novo', async () => {
+      abMunicipal = {
+        ele: '6257',
+        t: '1',
+        dg: '04/10/2026',
+        hg: '20:00:00',
+        idg: '1',
+        abr: muns.map((m) => ({
+          and: 'f',
+          tpabr: 'mun',
+          cdabr: m.cd,
+          dt: '04/10/2026',
+          ht: '19:00:00',
+          s: { ts: '10', st: '10' },
+        })),
+      };
+      const muCalls = () => globalCalls.filter((u) => /ac\d{5}-c0001-e006257-u\.json$/.test(u));
+
+      // 1ª visita: baixa todos os municípios e salva no IndexedDB.
+      const first = setup();
+      await first.user.click(await mapPath('AC'));
+      const map1 = await screen.findByTestId('state-map');
+      await waitFor(
+        () =>
+          expect(
+            [...map1.querySelectorAll('path[data-mun]')].every(
+              (p) => p.getAttribute('data-fill') !== 'unavailable',
+            ),
+          ).toBe(true),
+        { timeout: 10_000 },
+      );
+      expect(muCalls()).toHaveLength(acCodes.length);
+      // Espera o salvamento terminar.
+      await waitFor(async () => {
+        const { loadMunicipalCache } = await import('../services/municipalCache');
+        const c = await loadMunicipalCache(
+          { electionId: 'presidente-2026', codigoEleicao: '6257', turno: 1, uf: 'ac' },
+          7,
+        );
+        expect(Object.keys(c?.snapshot.entries ?? {})).toHaveLength(acCodes.length);
+      });
+
+      // Fecha o app e abre de novo (memória limpa, só o IndexedDB permanece).
+      cleanup();
+      globalCalls.length = 0;
+      window.history.replaceState(null, '', '/?turno=1&uf=AC');
+      setup();
+      const map2 = await screen.findByTestId('state-map');
+      await waitFor(() =>
+        expect(map2.querySelector('path[data-mun="10000"]')!.getAttribute('data-fill')).toBe(
+          'flavio',
+        ),
+      );
+      expect(map2.querySelector('path[data-mun="10001"]')!.getAttribute('data-fill')).toBe('lula');
+      // Andamento inalterado: nenhum arquivo municipal baixado de novo.
+      await waitFor(() =>
+        expect(globalCalls.some((u) => u.endsWith('/dados/ac/ac-e006257-ab.json'))).toBe(true),
+      );
+      await new Promise((r) => setTimeout(r, 300));
+      expect(muCalls()).toHaveLength(0);
+    }, 30_000);
   });
 });

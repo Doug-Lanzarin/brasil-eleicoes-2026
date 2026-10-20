@@ -5,6 +5,7 @@ import type { MunicipioInfo } from '../../services/tse/adapter';
 import type { MunicipalSnapshot } from '../../services/tse/municipal';
 import type { ElectionConfig, MapFill } from '../../types/election';
 import { compareCandidates, mapFillFor } from '../../utils/calc';
+import { formatBrasilia } from '../../utils/dates';
 import { formatPct, titleCase } from '../../utils/format';
 import { GeoMap, type GeoMapArea } from './GeoMap';
 
@@ -18,6 +19,9 @@ export interface StateMapProps {
   onSelect: (mun: string | null) => void;
   onBack: () => void;
   progress: { done: number; total: number } | null;
+  /** Origem dos dados na tela (dados salvos no aparelho ou ciclo concluído na rede). */
+  source?: 'cache' | 'network' | null;
+  cachedAt?: number | null;
 }
 
 /**
@@ -35,7 +39,10 @@ export function StateMap({
   onSelect,
   onBack,
   progress,
+  source = null,
+  cachedAt = null,
 }: StateMapProps) {
+  const hasData = !!snapshot && Object.keys(snapshot.entries).length > 0;
   const info = ufBySigla(uf)!;
   const byIbge = useMemo(() => new Map(municipios.map((m) => [m.ibge, m])), [municipios]);
 
@@ -91,14 +98,21 @@ export function StateMap({
           <span className="rounded-md bg-ink-950/80 px-2 py-0.5 text-xs text-ink-300">
             {info.nome} · {municipios.length} municípios
           </span>
-          {progress && progress.done < progress.total && (
+          {progress && progress.done < progress.total ? (
             <span
               className="rounded-md bg-ink-950/80 px-2 py-0.5 text-xs text-ink-300 tabular"
               role="status"
             >
-              Carregando resultados {progress.done}/{progress.total}
+              {hasData ? 'Atualizando' : 'Carregando resultados'} {progress.done}/{progress.total}
             </span>
-          )}
+          ) : source === 'cache' && cachedAt ? (
+            <span
+              className="rounded-md bg-ink-950/80 px-2 py-0.5 text-xs text-ink-300 tabular"
+              role="status"
+            >
+              Dados salvos às {formatBrasilia(new Date(cachedAt).toISOString())}
+            </span>
+          ) : null}
         </div>
       }
     />

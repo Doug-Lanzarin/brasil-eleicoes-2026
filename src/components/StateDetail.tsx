@@ -150,8 +150,10 @@ export function StateDetail({
       )}
       {municipal.progress && municipal.progress.done < municipal.progress.total && (
         <p className="text-xs text-ink-400 tabular" role="status">
-          Carregando resultados municipais: {formatInt(municipal.progress.done)} de{' '}
-          {formatInt(municipal.progress.total)}
+          {municipal.snapshot && Object.keys(municipal.snapshot.entries).length > 0
+            ? 'Atualizando resultados municipais'
+            : 'Carregando resultados municipais'}
+          : {formatInt(municipal.progress.done)} de {formatInt(municipal.progress.total)}
         </p>
       )}
       {municipal.municipios.length > 0 && (

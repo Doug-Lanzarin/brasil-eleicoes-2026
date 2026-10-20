@@ -10,7 +10,8 @@ import { PwaStatus } from '../components/PwaStatus';
 import { StateDetail } from '../components/StateDetail';
 import { StateList } from '../components/StateList';
 import { DataNotices, StatusBar } from '../components/StatusBar';
-import { isOfficialSource } from '../data/appConfig';
+import { appConfig, isOfficialSource } from '../data/appConfig';
+import { pruneMunicipalCache } from '../services/municipalCache';
 import { ELECTIONS, getElection, getRound } from '../data/elections';
 import { UFS, ufBySigla, type UfSigla } from '../data/ufs';
 import {
@@ -46,6 +47,11 @@ export function Dashboard({ storeFactory }: DashboardProps) {
   const ufTse = sel.uf ? ufBySigla(sel.uf)!.tse : null;
   const municipal = useMunicipalResults(election, round, ufTse);
   const munGeometry = useMunicipalGeometry(ufTse);
+
+  // Remove do aparelho resultados municipais expirados.
+  useEffect(() => {
+    void pruneMunicipalCache(appConfig.persistedMaxAgeDays);
+  }, []);
 
   // Ao trocar de turno, descarta caches municipais de outros turnos.
   useEffect(() => {
@@ -178,6 +184,8 @@ export function Dashboard({ storeFactory }: DashboardProps) {
                     onSelect={selectMun}
                     onBack={closeUf}
                     progress={municipal.progress}
+                    source={municipal.source}
+                    cachedAt={municipal.cachedAt}
                   />
                 ) : (
                   <div className="grid h-full place-content-center justify-items-center gap-2 text-sm text-ink-400">
